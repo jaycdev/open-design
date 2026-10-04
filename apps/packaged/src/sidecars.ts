@@ -61,6 +61,26 @@ const PACKAGED_CHILD_ENV_ALLOWLIST = [
   "https_proxy",
   "no_proxy",
   "OD_ALLOWED_INTERNAL_HOSTS",
+  // Standard Windows process vars. The list above is POSIX-shaped, and a
+  // GUI-launched packaged app is the ONLY environment a Windows user's agent
+  // CLIs may run in. Without these, mise shims die with "No version is set
+  // for shim" (PATHEXT drives shim->tool mapping), Node-based CLIs abort in
+  // crypto init with a CSPRNG assertion (SystemRoot), and any tool that reads
+  // the user profile (mise data/config dirs, temp dirs, ...) falls back to
+  // non-user locations. None of these are secrets — they are the same
+  // path/identity vars a normal Windows process always has.
+  "APPDATA",
+  "ComSpec",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "LOCALAPPDATA",
+  "PATHEXT",
+  "SystemRoot",
+  "TEMP",
+  "TMP",
+  "USERNAME",
+  "USERPROFILE",
+  "windir",
 ] as const;
 
 // The daemon owns the historical-outer compatibility handoff. Preserve the
@@ -87,11 +107,22 @@ const PACKAGED_DESKTOP_HANDOFF_ENV_KEYS = [
   "OD_UPDATE_PLATFORM",
 ] as const;
 
-function shouldForwardPackagedChildEnv(key: string, includeProviderSecrets = false): boolean {
+const PACKAGED_CHILD_ENV_ALLOWLIST_KEYS = new Set<string>(PACKAGED_CHILD_ENV_ALLOWLIST);
+const PACKAGED_CHILD_ENV_ALLOWLIST_KEYS_WINDOWS = new Set<string>(
+  PACKAGED_CHILD_ENV_ALLOWLIST.map((key) => key.toLowerCase()),
+);
+
+export function shouldForwardPackagedChildEnv(
+  key: string,
+  includeProviderSecrets = false,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  const allowlisted =
+    PACKAGED_CHILD_ENV_ALLOWLIST_KEYS.has(key) ||
+    (platform === "win32" &&
+      PACKAGED_CHILD_ENV_ALLOWLIST_KEYS_WINDOWS.has(key.toLowerCase()));
   return (
-    PACKAGED_CHILD_ENV_ALLOWLIST.includes(
-      key as (typeof PACKAGED_CHILD_ENV_ALLOWLIST)[number],
-    ) ||
+    allowlisted ||
     (includeProviderSecrets && (key.endsWith("_API_KEY") || key.endsWith("_TOKEN")))
   );
 }

@@ -1019,6 +1019,35 @@ describe("wellKnownUserToolchainBins", () => {
     }
   });
 
+  it("surfaces Windows mise shims and node install roots under %LOCALAPPDATA%\\mise", () => {
+    const originalPlatform = process.platform;
+    const home = mkdtempSync(join(tmpdir(), "wkutb-win-mise-home-"));
+    const localAppData = mkdtempSync(join(tmpdir(), "wkutb-win-mise-localappdata-"));
+    const nodeInstallDir = join(localAppData, "mise", "installs", "node", "24.21.0");
+    mkdirSync(nodeInstallDir, { recursive: true });
+    try {
+      Object.defineProperty(process, "platform", {
+        configurable: true,
+        value: "win32",
+      });
+      const dirs = wellKnownUserToolchainBins({
+        home,
+        env: { LOCALAPPDATA: localAppData },
+        includeSystemBins: false,
+      });
+      expect(dirs).toContain(join(localAppData, "mise", "shims"));
+      expect(dirs).toContain(nodeInstallDir);
+      expect(dirs).toContain(join(home, ".local", "share", "mise", "shims"));
+    } finally {
+      Object.defineProperty(process, "platform", {
+        configurable: true,
+        value: originalPlatform,
+      });
+      rmSync(home, { recursive: true, force: true });
+      rmSync(localAppData, { recursive: true, force: true });
+    }
+  });
+
   it("respects $MISE_DATA_DIR for the shims location (custom mise root)", () => {
     const home = mkdtempSync(join(tmpdir(), "wkutb-mise-data-"));
     const customMise = mkdtempSync(join(tmpdir(), "wkutb-custom-mise-"));

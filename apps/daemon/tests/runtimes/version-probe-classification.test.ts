@@ -97,6 +97,14 @@ describe('version probe failure classification', () => {
         'PowerShell, typed exception',
         'CategoryInfo : ObjectNotFound: (dsh:String) [], CommandNotFoundException\n',
       ],
+      [
+        'mise shim, mise executable missing',
+        'mise-shim: failed to execute mise: program not found\n',
+      ],
+      [
+        'mise shim, no version set for the shim',
+        'the following:\nmise use -g npm:example@1.0.0\n',
+      ],
     ])('treats exit 1 with %s as a missing target', (_label, stderr) => {
       expect(classifyVersionProbeFailure(execFileError(1, stderr))).toEqual({
         kind: 'not-invocable',

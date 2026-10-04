@@ -38,6 +38,7 @@ import {
   resolvePackagedChildBaseEnv,
   resolvePackagedElectronNodeCommand,
   resolvePackagedPathEnv,
+  shouldForwardPackagedChildEnv,
   waitForStatus,
 } from '../src/sidecars.js';
 import type { PackagedNamespacePaths } from '../src/paths.js';
@@ -433,6 +434,56 @@ describe('packaged child Vite+ environment forwarding', () => {
       else process.env.VP_HOME = originalVpHome;
       rmSync(vpHome, { recursive: true, force: true });
     }
+  });
+});
+
+describe('packaged child Windows profile environment forwarding', () => {
+  // The packaged child env allowlist used to be POSIX-only (HOME, TMPDIR,
+  // USER, LOGNAME, ...), so on Windows the daemon and every agent CLI it
+  // spawns ran without the standard Windows process vars. Observed fallout:
+  // mise shims (e.g. a `kilo` shim) die with "No version is set for shim"
+  // because PATHEXT is missing, and Node-based CLIs abort with a CSPRNG
+  // assertion (exit 134) because SystemRoot is missing. Forward the
+  // standard Windows process vars so version-manager shims and agent CLIs
+  // behave identically to a shell launch.
+  it('forwards the standard Windows process env vars to packaged sidecars', () => {
+    const env = resolvePackagedChildBaseEnv({
+      APPDATA: 'C:\\Users\\tester\\AppData\\Roaming',
+      ComSpec: 'C:\\Windows\\system32\\cmd.exe',
+      HOMEDRIVE: 'C:',
+      HOMEPATH: '\\Users\\tester',
+      LOCALAPPDATA: 'C:\\Users\\tester\\AppData\\Local',
+      PATHEXT: '.COM;.EXE;.BAT;.CMD',
+      RANDOM_INTERNAL_FLAG: 'drop-me',
+      SystemRoot: 'C:\\Windows',
+      TEMP: 'C:\\Users\\tester\\AppData\\Local\\Temp',
+      TMP: 'C:\\Users\\tester\\AppData\\Local\\Temp',
+      USERNAME: 'tester',
+      USERPROFILE: 'C:\\Users\\tester',
+      windir: 'C:\\Windows',
+    });
+
+    expect(env).toMatchObject({
+      APPDATA: 'C:\\Users\\tester\\AppData\\Roaming',
+      ComSpec: 'C:\\Windows\\system32\\cmd.exe',
+      HOMEDRIVE: 'C:',
+      HOMEPATH: '\\Users\\tester',
+      LOCALAPPDATA: 'C:\\Users\\tester\\AppData\\Local',
+      PATHEXT: '.COM;.EXE;.BAT;.CMD',
+      SystemRoot: 'C:\\Windows',
+      TEMP: 'C:\\Users\\tester\\AppData\\Local\\Temp',
+      TMP: 'C:\\Users\\tester\\AppData\\Local\\Temp',
+      USERNAME: 'tester',
+      USERPROFILE: 'C:\\Users\\tester',
+      windir: 'C:\\Windows',
+    });
+    expect(env.RANDOM_INTERNAL_FLAG).toBeUndefined();
+  });
+
+  it('matches Windows env var names case-insensitively only on win32', () => {
+    expect(shouldForwardPackagedChildEnv('SYSTEMROOT', false, 'win32')).toBe(true);
+    expect(shouldForwardPackagedChildEnv('Windir', false, 'win32')).toBe(true);
+    expect(shouldForwardPackagedChildEnv('SYSTEMROOT', false, 'linux')).toBe(false);
   });
 });
 

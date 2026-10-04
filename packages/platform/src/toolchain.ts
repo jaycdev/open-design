@@ -160,11 +160,27 @@ export function wellKnownUserToolchainBins(
   // We only fall back to the legacy ~/.mise/shims path when no explicit
   // MISE_DATA_DIR override is provided.
   const miseDataOverride = resolveUserScopedHome(env.MISE_DATA_DIR, home);
-  const miseData = miseDataOverride || join(home, ".local", "share", "mise");
-  dirs.push(join(miseData, "shims"));
-
-  if (!miseDataOverride) {
-    dirs.push(join(home, ".mise", "shims"));
+  const miseDataRoots: string[] = [];
+  if (miseDataOverride) {
+    miseDataRoots.push(miseDataOverride);
+  } else {
+    // mise on Windows keeps its default data dir under %LOCALAPPDATA%\mise
+    // (e.g. C:\Users\<user>\AppData\Local\mise), not the POSIX
+    // ~/.local/share/mise path. A GUI-launched daemon inherits a stripped
+    // PATH and reads no shell rc, so without this probe mise-installed CLIs
+    // are invisible even when their shims exist.
+    if (
+      process.platform === "win32" &&
+      typeof env.LOCALAPPDATA === "string" &&
+      env.LOCALAPPDATA.trim().length > 0
+    ) {
+      miseDataRoots.push(join(env.LOCALAPPDATA.trim(), "mise"));
+    }
+    miseDataRoots.push(join(home, ".local", "share", "mise"));
+    miseDataRoots.push(join(home, ".mise"));
+  }
+  for (const miseData of miseDataRoots) {
+    dirs.push(join(miseData, "shims"));
   }
 
   // Nix / NixOS / nix-darwin: a GUI-launched daemon inherits a minimal PATH
@@ -190,13 +206,18 @@ export function wellKnownUserToolchainBins(
   // version directory's bin folder. Best-effort — missing roots simply
   // contribute nothing.
   // When MISE_DATA_DIR is set we use the same root for consistency with shims.
-  const miseInstalls = join(miseData, "installs");
-  dirs.push(...existingMiseNpmPackageBinDirs(miseInstalls));
-  const nodeInstallRoots: Array<{ root: string; segments: string[] }> = [
-    {
-      root: join(miseInstalls, "node"),
-      segments: ["bin"],
-    },
+  const nodeInstallRoots: Array<{ root: string; segments: string[] }> = [];
+  for (const miseData of miseDataRoots) {
+    const miseInstalls = join(miseData, "installs");
+    dirs.push(...existingMiseNpmPackageBinDirs(miseInstalls));
+    nodeInstallRoots.push({ root: join(miseInstalls, "node"), segments: ["bin"] });
+    // mise on Windows installs npm global CLIs (e.g. kilo.cmd) directly in
+    // the Node version root, not in a POSIX-style `bin` subdirectory.
+    if (process.platform === "win32") {
+      nodeInstallRoots.push({ root: join(miseInstalls, "node"), segments: [] });
+    }
+  }
+  nodeInstallRoots.push(
     {
       root: join(home, ".nvm", "versions", "node"),
       segments: ["bin"],
@@ -209,7 +230,7 @@ export function wellKnownUserToolchainBins(
       root: join(home, ".fnm", "node-versions"),
       segments: ["installation", "bin"],
     },
-  ];
+  );
   // Windows fnm keeps Node installs under <fnm-root>\node-versions\<ver>\
   // installation, with node.exe — and any `npm i -g`'d CLI shim such as
   // codex.cmd — directly in `installation` (no POSIX-style `bin` subdir).

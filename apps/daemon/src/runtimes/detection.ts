@@ -281,6 +281,9 @@ const LAUNCHER_TARGET_MISSING_PATTERNS = [
   /is not recognized as (?:an internal or external command|the name of a cmdlet)/i,
   /\bCommandNotFoundException\b/,
   /The system cannot find the (?:path|file) specified/i,
+  /mise-shim: failed to execute mise/i,
+  /No version is set for (?:a |the )?shim/i,
+  /\bmise use -g\b/,
 ];
 
 function launcherTargetMissing(err: unknown): boolean {
