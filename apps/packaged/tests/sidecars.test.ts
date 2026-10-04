@@ -276,6 +276,17 @@ describe('packaged child Vite+ environment forwarding', () => {
     expect(env.RANDOM_INTERNAL_FLAG).toBeUndefined();
   });
 
+  it('forwards MISE_DATA_DIR so custom mise locations are visible to agent CLIs', () => {
+    const env = resolvePackagedChildBaseEnv({
+      HOME: '/Users/tester',
+      MISE_DATA_DIR: '/Users/tester/.custom-mise',
+      RANDOM_INTERNAL_FLAG: 'drop-me',
+    });
+
+    expect(env.MISE_DATA_DIR).toBe('/Users/tester/.custom-mise');
+    expect(env.RANDOM_INTERNAL_FLAG).toBeUndefined();
+  });
+
   it('keeps VP_HOME in the packaged child base env without forwarding unrelated variables', () => {
     const env = resolvePackagedChildBaseEnv({
       HOME: '/Users/tester',
